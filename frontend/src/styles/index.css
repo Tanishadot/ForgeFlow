@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0b0f12;
+  --panel: #0f1720;
+  --muted: #9aa4ad;
+  --accent: #76ff03;
+}
+
+body {
+  @apply bg-gradient-to-b from-[#07121a] to-[#09161f] text-slate-100;
+  background-color: var(--bg);
+}
+
+.panel {
+  background-color: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.04);
+}

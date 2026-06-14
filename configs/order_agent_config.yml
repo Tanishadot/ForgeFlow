@@ -1,0 +1,34 @@
+# AgentIQ workflow configuration for the Order Prioritization Agent.
+#
+# Usage:
+#   aiq run --config_file configs/order_agent_config.yml
+#
+# Or to serve via the API:
+#   aiq serve --config_file configs/order_agent_config.yml
+
+functions:
+  order_prioritizer:
+    _type: order_prioritizer
+    priority_weight_due_date: 0.4
+    priority_weight_quantity: 0.3
+    priority_weight_urgency: 0.3
+    result_limit: 0
+
+llms:
+  nim_llm:
+    _type: nim
+    model_name: nvidia/nemotron-4-340b-instruct
+    temperature: 0.0
+    max_tokens: 2048
+
+workflow:
+  _type: react_agent
+  tool_names:
+    - order_prioritizer
+  llm_name: nim_llm
+  verbose: true
+  max_retries: 3
+  parse_agent_response_max_retries: 3
+  description: >
+    Order Prioritization Agent. Reads orders from the data store and ranks
+    them by due date, quantity, and urgency score.

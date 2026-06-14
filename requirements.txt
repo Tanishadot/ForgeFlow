@@ -1,0 +1,28 @@
+# FastAPI Data Ingestion Service Dependencies
+# Python 3.11+
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Data Processing
+pandas==2.1.3
+numpy==1.26.2
+
+# Data Validation
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# File Upload Support
+python-multipart==0.0.6
+
+# HTTP Client (optional, for testing)
+httpx==0.25.2
+
+# NVIDIA AgentIQ (NeMo Agent Toolkit)
+# Install from source per https://docs.nvidia.com/agentiq/latest/intro/install.html
+# aiq @ git+https://github.com/NVIDIA/AgentIQ.git
+
+# OR install individual plugins as needed:
+# aiq[openai]  - for OpenAI LLM provider
+# aiq[nim]     - for NVIDIA NIM LLM provider

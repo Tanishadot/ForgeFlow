@@ -1,0 +1,33 @@
+# AgentIQ workflow configuration for the Machine Agent.
+#
+# Usage:
+#   aiq run --config_file configs/machine_agent_config.yml
+#
+# Or to serve via the API:
+#   aiq serve --config_file configs/machine_agent_config.yml
+
+functions:
+  machine_agent:
+    _type: machine_agent
+    machines_file: machines.csv
+    overload_threshold: 0.85
+    minimum_efficiency: 0.0
+
+llms:
+  nim_llm:
+    _type: nim
+    model_name: nvidia/nemotron-4-340b-instruct
+    temperature: 0.0
+    max_tokens: 2048
+
+workflow:
+  _type: react_agent
+  tool_names:
+    - machine_agent
+  llm_name: nim_llm
+  verbose: true
+  max_retries: 3
+  parse_agent_response_max_retries: 3
+  description: >
+    Machine Agent. Reads machine availability, detects downtime and overloaded
+    machines, and recommends machine assignments.

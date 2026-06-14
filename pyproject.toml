@@ -1,0 +1,16 @@
+[project]
+name = "manufacturing-agents"
+version = "1.0.0"
+description = "NVIDIA AgentIQ manufacturing order, inventory, machine, scheduler, and explanation agents"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.1.0",
+    "pydantic>=2.5.0",
+]
+
+[project.entry-points."aiq.components"]
+order_agent = "agents.order_agent.register"
+inventory_agent = "agents.inventory_agent.register"
+machine_agent = "agents.machine_agent.register"
+scheduler_agent = "agents.scheduler_agent.register"
+explanation_agent = "agents.explanation_agent.register"

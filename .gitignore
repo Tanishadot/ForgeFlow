@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+env/
+venv/
+.env
+.venv
+
+# Byte-compiled / optimized / DLL files
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# VS Code
+.vscode/
+
+# Node
+frontend/node_modules/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Python virtualenv
+.Pipfile.lock
+
+# pytest
+.cache/
+
+# coverage
+htmlcov/
+.coverage
+
+# npm
+node_modules/
+
+# Local env files
+.env.local
+.env.*.local

@@ -1,0 +1,32 @@
+# AgentIQ workflow configuration for the Inventory Agent.
+#
+# Usage:
+#   aiq run --config_file configs/inventory_agent_config.yml
+#
+# Or to serve via the API:
+#   aiq serve --config_file configs/inventory_agent_config.yml
+
+functions:
+  inventory_agent:
+    _type: inventory_agent
+    inventory_file: inventory.csv
+    orders_file: null
+
+llms:
+  nim_llm:
+    _type: nim
+    model_name: nvidia/nemotron-4-340b-instruct
+    temperature: 0.0
+    max_tokens: 2048
+
+workflow:
+  _type: react_agent
+  tool_names:
+    - inventory_agent
+  llm_name: nim_llm
+  verbose: true
+  max_retries: 3
+  parse_agent_response_max_retries: 3
+  description: >
+    Inventory Agent. Reads inventory data, verifies material availability,
+    detects shortages, and generates inventory alerts.

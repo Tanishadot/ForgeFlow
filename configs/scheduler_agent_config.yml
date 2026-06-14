@@ -1,0 +1,38 @@
+# AgentIQ workflow configuration for the Scheduler Agent.
+#
+# Usage:
+#   aiq run --config_file configs/scheduler_agent_config.yml
+#
+# Or to serve via the API:
+#   aiq serve --config_file configs/scheduler_agent_config.yml
+
+functions:
+  scheduler_agent:
+    _type: scheduler_agent
+    orders_file: orders.csv
+    inventory_file: inventory.csv
+    machines_file: machines.csv
+    workday_start: "09:00"
+    workday_end: "17:00"
+    default_duration_minutes: 60
+    setup_minutes: 0
+
+llms:
+  nim_llm:
+    _type: nim
+    model_name: nvidia/nemotron-4-340b-instruct
+    temperature: 0.0
+    max_tokens: 2048
+
+workflow:
+  _type: react_agent
+  tool_names:
+    - scheduler_agent
+  llm_name: nim_llm
+  verbose: true
+  max_retries: 3
+  parse_agent_response_max_retries: 3
+  description: >
+    Scheduler Agent. Consumes prioritized orders, inventory status, and machine
+    availability to create a production schedule with machine assignments,
+    start and end times, and delay detection.

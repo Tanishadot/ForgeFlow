@@ -1,0 +1,35 @@
+# AgentIQ workflow configuration for the Production Explanation Agent.
+#
+# Required for NVIDIA NIM:
+#   NVIDIA_API_KEY=<your key>
+#
+# Optional:
+#   NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
+#   NVIDIA_NIM_MODEL=nvidia/llama-3.1-nemotron-70b-instruct
+#
+# Usage:
+#   aiq run --config_file configs/explanation_agent_config.yml
+
+functions:
+  explanation_agent:
+    _type: explanation_agent
+    use_nim: true
+
+llms:
+  nim_llm:
+    _type: nim
+    model_name: nvidia/llama-3.1-nemotron-70b-instruct
+    temperature: 0.2
+    max_tokens: 1200
+
+workflow:
+  _type: react_agent
+  tool_names:
+    - explanation_agent
+  llm_name: nim_llm
+  verbose: true
+  max_retries: 3
+  parse_agent_response_max_retries: 3
+  description: >
+    Production Explanation Agent. Explains why orders were prioritized, why
+    delays occurred, and why machines were assigned.
