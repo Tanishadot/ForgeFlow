@@ -1,0 +1,5 @@
+machine_id,machine_type,location,capacity,current_load,efficiency,status
+M-1,CNC,Cell-A,300,245,0.92,running
+M-2,Lathe,Cell-B,200,122,0.85,running
+M-3,CNC,Cell-A,300,0,0.00,down
+M-4,Assembly,Cell-C,150,68,0.78,running

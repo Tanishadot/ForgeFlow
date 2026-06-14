@@ -1,0 +1,7 @@
+product_id,material_name,quantity_on_hand,reorder_level,unit
+MAT-001,Steel Rod 6mm,45,80,kg
+MAT-002,Aluminum Sheet,200,50,sheets
+MAT-003,Rubber Seal,12,50,units
+MAT-004,Brass Fitting,89,40,units
+MAT-005,Carbon Fiber,156,30,kg
+MAT-006,Titanium Bolt,8,25,units

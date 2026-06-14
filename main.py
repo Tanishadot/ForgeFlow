@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.data_routes import router as data_router
 from routes.explanation_routes import router as explanation_router
 from routes.copilot_routes import router as copilot_router
+from routes.schedule_routes import router as schedule_router
 
 # Create FastAPI application instance
 app = FastAPI(
@@ -31,6 +32,7 @@ app.add_middleware(
 app.include_router(data_router)
 app.include_router(explanation_router)
 app.include_router(copilot_router)
+app.include_router(schedule_router)
 
 
 @app.get("/")

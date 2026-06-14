@@ -1,0 +1,13 @@
+order_id,product_name,quantity,due_date,urgency_score,machine_type,location,duration_minutes,material
+O-001,Bracket-A,200,2026-06-14,0.95,CNC,Cell-A,90,Steel Rod 6mm
+O-002,Gasket-B,150,2026-06-14,0.80,Lathe,Cell-B,60,Aluminum Sheet
+O-003,Seal-C,300,2026-06-14,0.90,CNC,Cell-A,120,Rubber Seal
+O-004,Shaft-D,80,2026-06-15,0.55,Lathe,Cell-B,45,Aluminum Sheet
+O-005,Bracket-E,250,2026-06-14,0.85,CNC,Cell-A,100,Steel Rod 6mm
+O-006,Valve-F,100,2026-06-15,0.45,Assembly,Cell-C,60,Brass Fitting
+O-007,Flange-G,175,2026-06-14,0.75,CNC,Cell-A,80,Rubber Seal
+O-008,Ring-H,60,2026-06-16,0.30,Lathe,Cell-B,30,Carbon Fiber
+O-009,Cover-I,90,2026-06-15,0.60,Assembly,Cell-C,45,Brass Fitting
+O-010,Bolt-J,400,2026-06-14,0.70,CNC,Cell-A,75,Steel Rod 6mm
+O-011,Nut-K,350,2026-06-15,0.40,Lathe,Cell-B,50,Aluminum Sheet
+O-012,Pipe-L,120,2026-06-16,0.35,Assembly,Cell-C,55,Carbon Fiber

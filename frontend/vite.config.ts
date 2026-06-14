@@ -9,7 +9,8 @@ export default defineConfig({
       // Proxy API calls to backend
       '/api': 'http://localhost:8000',
       '/explain': 'http://localhost:8000',
-      '/simulate': 'http://localhost:8000'
+      '/simulate': 'http://localhost:8000',
+      '/copilot': 'http://localhost:8000'
     }
   }
 })
