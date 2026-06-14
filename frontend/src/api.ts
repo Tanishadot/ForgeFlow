@@ -15,8 +15,12 @@ interface DataResponse<T> {
 }
 
 interface CopilotResponse {
-  response: string
+  reply: string
+  response: string   // alias returned by service for convenience
   session_id: string
+  provider: string
+  status: string
+  errors: string[]
 }
 
 export const api = {

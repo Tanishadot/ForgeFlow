@@ -1,46 +1,35 @@
-"""Factory Copilot service: maintains chat history and queries NVIDIA NIM."""
-
+"""Factory Copilot: session-based chat grounded in the production schedule."""
 from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import uuid
 from typing import Any
 
-import httpx
+from nim_client import nim_client
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
-DEFAULT_NIM_MODEL = "nvidia/llama-3.1-nemotron-70b-instruct"
+_SYSTEM_PROMPT = (
+    "You are Factory Copilot, an AI assistant for manufacturing production planning. "
+    "Answer questions about the production schedule provided. "
+    "Ground every answer in the schedule data — do not hallucinate order IDs, machines, or times. "
+    "Be concise and direct. Factory schedulers are busy; avoid filler sentences. "
+    "Return plain text."
+)
 
 
 class FactoryCopilotService:
-    """Handles conversational queries against a production schedule using NVIDIA NIM.
-
-    This implementation keeps a very small in-memory session store mapping
-    `session_id` -> list[message]. Each message is a dict with `role` and `content`.
-    """
+    """Session-based conversational copilot grounded in a production schedule."""
 
     _sessions: dict[str, list[dict[str, str]]] = {}
 
-    @classmethod
-    def _nim_is_configured(cls) -> bool:
-        return bool(os.getenv("NVIDIA_API_KEY"))
-
-    @classmethod
-    def _new_session_id(cls) -> str:
-        return uuid.uuid4().hex
+    # ── Public API ────────────────────────────────────────────────────────────
 
     @classmethod
     def get_history(cls, session_id: str) -> list[dict[str, str]]:
-        return cls._sessions.get(session_id, [])
-
-    @classmethod
-    def _save_message(cls, session_id: str, role: str, content: str) -> None:
-        cls._sessions.setdefault(session_id, []).append({"role": role, "content": content})
+        return list(cls._sessions.get(session_id, []))
 
     @classmethod
     async def chat(
@@ -51,152 +40,141 @@ class FactoryCopilotService:
         use_nim: bool = True,
     ) -> dict[str, Any]:
         if not session_id:
-            session_id = cls._new_session_id()
+            session_id = uuid.uuid4().hex
 
-        # Save user message to history
-        cls._save_message(session_id, "user", message)
+        cls._append(session_id, "user", message)
 
-        # Build messages for NIM
-        system_prompt = (
-            "You are Factory Copilot. Answer user questions about the provided production schedule. "
-            "Ground your answers in the schedule JSON and don't hallucinate. When asked for lists, return concise bullets. "
-            "Maintain context with the conversation history. Return plain text replies."
-        )
-
-        schedule_text = json.dumps(schedule, indent=2, default=str)
-        # Prepare message list: system, schedule, history, current user
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "system", "content": f"Schedule JSON:\n{schedule_text}"},
-        ]
-
-        # append prior history
-        for m in cls.get_history(session_id):
-            messages.append({"role": m["role"], "content": m["content"]})
-
-        messages.append({"role": "user", "content": message})
-
-        # Try NIM if requested and configured
-        if use_nim and cls._nim_is_configured():
+        if use_nim and nim_client.is_configured:
             try:
-                reply = await cls._query_nim(messages=messages)
-                cls._save_message(session_id, "assistant", reply)
-                return {
-                    "session_id": session_id,
-                    "reply": reply,
-                    "provider": "nim",
-                    "status": "success",
-                    "errors": [],
-                }
+                reply = await cls._nim_reply(message, schedule, session_id)
+                cls._append(session_id, "assistant", reply)
+                return cls._ok(session_id, reply, "nim")
             except Exception as exc:
-                logger.exception("NIM query failed, falling back to local responder")
-                fallback = cls._local_answer(message=message, schedule=schedule)
-                cls._save_message(session_id, "assistant", fallback)
-                return {
-                    "session_id": session_id,
-                    "reply": fallback,
-                    "provider": "local",
-                    "status": "fallback",
-                    "errors": [str(exc)],
-                }
+                logger.exception("NIM chat failed; using local fallback")
+                reply = cls._local_answer(message, schedule)
+                cls._append(session_id, "assistant", reply)
+                return cls._ok(session_id, reply, "local", errors=[str(exc)])
 
-        # local fallback
-        reply = cls._local_answer(message=message, schedule=schedule)
-        cls._save_message(session_id, "assistant", reply)
+        reply = cls._local_answer(message, schedule)
+        cls._append(session_id, "assistant", reply)
+        errors = [] if not use_nim else ["NVIDIA_API_KEY not configured"]
+        return cls._ok(session_id, reply, "local", errors=errors)
+
+    # ── Internal helpers ──────────────────────────────────────────────────────
+
+    @classmethod
+    def _append(cls, session_id: str, role: str, content: str) -> None:
+        cls._sessions.setdefault(session_id, []).append({"role": role, "content": content})
+
+    @staticmethod
+    def _ok(
+        session_id: str,
+        reply: str,
+        provider: str,
+        errors: list[str] | None = None,
+    ) -> dict[str, Any]:
         return {
             "session_id": session_id,
             "reply": reply,
-            "provider": "local",
-            "status": "fallback",
-            "errors": [] if not use_nim else ["NVIDIA NIM is not configured"],
+            "response": reply,   # alias for forward-compatibility
+            "provider": provider,
+            "status": "success" if not errors else "fallback",
+            "errors": errors or [],
         }
 
     @classmethod
-    async def _query_nim(cls, messages: list[dict[str, str]]) -> str:
-        api_key = os.environ["NVIDIA_API_KEY"]
-        base_url = os.getenv("NVIDIA_NIM_BASE_URL", DEFAULT_NIM_BASE_URL).rstrip("/")
-        model = os.getenv("NVIDIA_NIM_MODEL", DEFAULT_NIM_MODEL)
-        timeout_seconds = float(os.getenv("NVIDIA_NIM_TIMEOUT_SECONDS", "30"))
+    async def _nim_reply(
+        cls,
+        message: str,
+        schedule: list[dict[str, Any]],
+        session_id: str,
+    ) -> str:
+        schedule_json = json.dumps(schedule, indent=2, default=str)
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": f"Current production schedule:\n{schedule_json}"},
+        ]
+        # Append prior turns (skip the last user message — it's added below)
+        for turn in cls._sessions.get(session_id, [])[:-1]:
+            messages.append({"role": turn["role"], "content": turn["content"]})
+        messages.append({"role": "user", "content": message})
 
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": 0.2,
-            "max_tokens": 800,
-        }
+        return await nim_client.chat(messages=messages)
 
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            response = await client.post(
-                f"{base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-            response.raise_for_status()
-
-        data = response.json()
-        # Expect same shape as explanation service
-        content = data["choices"][0]["message"]["content"]
-        # Return raw content
-        return content
+    # ── Local heuristic answers ───────────────────────────────────────────────
 
     @staticmethod
     def _local_answer(message: str, schedule: list[dict[str, Any]]) -> str:
-        """Simple heuristic grounded answers for common queries."""
         text = message.lower()
 
-        # Why is order X delayed?
-        m = re.search(r"order\s+([A-Za-z0-9_-]+)\s+delayed", text)
-        if m:
-            order_id = m.group(1)
+        # "why is order X delayed/blocked?"
+        m = re.search(r"order\s+([A-Za-z0-9_-]+)", text)
+        if m and any(kw in text for kw in ("delay", "block", "status", "why")):
+            oid = m.group(1).upper()
             for item in schedule:
-                oid = str(item.get("order") or item.get("order_id") or "")
-                if oid == order_id:
+                raw = str(item.get("order") or item.get("order_id") or "")
+                if raw.upper() == oid or oid in raw.upper():
                     status = item.get("status", "scheduled")
+                    reason = item.get("reason", "no reason recorded")
+                    machine = item.get("machine") or "unassigned"
+                    start   = item.get("start") or "—"
+                    end     = item.get("end") or "—"
+                    if status == "blocked":
+                        return f"Order {raw} is BLOCKED: {reason}. No machine has been assigned."
                     if status == "delayed" or item.get("delay"):
-                        reason = item.get("reason") or "a scheduling conflict or missing input"
-                        return f"Order {order_id} is delayed: {reason}. Current status: {status}."
-                    return f"Order {order_id} is not marked delayed (status={status})."
-            return f"Order {order_id} not found in the provided schedule."
+                        return f"Order {raw} is DELAYED: {reason}. Assigned to {machine} ({start} → {end})."
+                    return f"Order {raw} is on time — status: {status}. Machine: {machine}, {start} → {end}."
+            return f"Order {oid} was not found in the current schedule."
 
-        # Which machine is overloaded?
-        if "which machine is overloaded" in text or "overloaded" in text:
+        # "which machine is overloaded / busiest?"
+        if any(kw in text for kw in ("overload", "busiest", "most load", "machine")):
             counts: dict[str, int] = {}
             for item in schedule:
-                m_id = str(item.get("machine") or item.get("machine_id") or "unassigned")
-                counts[m_id] = counts.get(m_id, 0) + 1
+                mid = str(item.get("machine") or "unassigned")
+                if mid != "unassigned":
+                    counts[mid] = counts.get(mid, 0) + 1
             if not counts:
-                return "No machine assignments found in the schedule."
-            # pick machine with max assignments
-            overloaded = max(counts.items(), key=lambda kv: kv[1])
-            return f"Machine {overloaded[0]} has the most assignments ({overloaded[1]})."
+                return "No machine assignments found in the current schedule."
+            busiest_id, busiest_count = max(counts.items(), key=lambda kv: kv[1])
+            return (
+                f"Machine {busiest_id} has the most assignments ({busiest_count} orders). "
+                f"All machine load counts: {', '.join(f'{m}={c}' for m, c in sorted(counts.items()))}."
+            )
 
-        # What orders are due today?
-        if "due today" in text or "due today?" in text:
-            from datetime import datetime
+        # "what orders are blocked / delayed / at risk?"
+        if any(kw in text for kw in ("blocked", "at risk", "delayed", "late")):
+            blocked = [s["order"] for s in schedule if s.get("status") == "blocked"]
+            delayed = [s["order"] for s in schedule if s.get("status") == "delayed" or s.get("delay")]
+            parts: list[str] = []
+            if blocked:
+                parts.append(f"Blocked ({len(blocked)}): {', '.join(str(o) for o in blocked)}")
+            if delayed:
+                parts.append(f"Delayed ({len(delayed)}): {', '.join(str(o) for o in delayed)}")
+            return ". ".join(parts) if parts else "No blocked or delayed orders in the current schedule."
 
-            today = datetime.utcnow().date()
-            due_orders = []
-            for item in schedule:
-                due = item.get("due") or item.get("end") or item.get("date")
-                if not due:
-                    continue
-                try:
-                    d = datetime.fromisoformat(str(due)).date()
-                except Exception:
-                    continue
-                if d == today:
-                    due_orders.append(str(item.get("order") or item.get("order_id") or "unknown"))
-            if not due_orders:
-                return "No orders are due today according to the provided schedule."
-            return "Orders due today: " + ", ".join(due_orders)
+        # "how can I recover / what can I do?"
+        if any(kw in text for kw in ("recover", "reroute", "fix", "resolve", "action")):
+            blocked = [s for s in schedule if s.get("status") == "blocked"]
+            delayed = [s for s in schedule if s.get("status") == "delayed" or s.get("delay")]
+            if not blocked and not delayed:
+                return "The schedule looks healthy — no blocked or delayed orders at the moment."
+            actions: list[str] = []
+            if blocked:
+                actions.append(
+                    f"Release {len(blocked)} blocked order(s) by resolving inventory or machine constraints: "
+                    + ", ".join(str(s["order"]) for s in blocked)
+                )
+            if delayed:
+                actions.append(
+                    f"Review {len(delayed)} delayed order(s) — consider rerouting to an available machine or negotiating the deadline: "
+                    + ", ".join(str(s["order"]) for s in delayed)
+                )
+            return " | ".join(actions)
 
-        # Fallback: short summary of schedule
-        total = len(schedule)
-        machines = {str(item.get("machine") or item.get("machine_id") or "unassigned") for item in schedule}
+        # Generic summary
+        total   = len(schedule)
+        on_time = sum(1 for s in schedule if not s.get("delay") and s.get("status") not in ("blocked", "delayed", "error"))
         return (
-            f"I can help with questions about the schedule. Currently there are {total} scheduled items "
-            f"across {len(machines)} machines. Ask ‘Why is order <id> delayed?’ or ‘Which machine is overloaded?’."
+            f"Schedule summary: {total} orders total, {on_time} on time. "
+            f"Ask about a specific order, machine load, or recovery options."
         )

@@ -34,15 +34,10 @@ export default function CopilotPanel() {
     setHistory(h => [...h, { role: 'user', text: msg }])
     try {
       const resp = await api.copilotChat(msg, schedule, sessionId)
-      setHistory(h => [...h, { role: 'assistant', text: resp.data.response }])
-    } catch {
-      // fallback: call /explain as a degraded response
-      try {
-        const fallback = await api.copilotChat(msg, schedule, sessionId)
-        setHistory(h => [...h, { role: 'assistant', text: fallback.data.response }])
-      } catch {
-        setHistory(h => [...h, { role: 'assistant', text: 'Unable to reach AI service. Check backend.' }])
-      }
+      setHistory(h => [...h, { role: 'assistant', text: resp.data.reply || resp.data.response }])
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unable to reach AI service. Check backend.'
+      setHistory(h => [...h, { role: 'assistant', text: message }])
     } finally {
       setLoading(false)
     }

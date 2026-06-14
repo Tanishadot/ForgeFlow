@@ -36,7 +36,7 @@ export default function Copilot() {
     setHistory(h => [...h, { role: 'user', text: msg }])
     try {
       const resp = await api.copilotChat(msg, schedule, sessionId)
-      setHistory(h => [...h, { role: 'assistant', text: resp.data.response }])
+      setHistory(h => [...h, { role: 'assistant', text: resp.data.reply || resp.data.response }])
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to reach AI service.'
       setHistory(h => [...h, { role: 'assistant', text: `Error: ${message}` }])

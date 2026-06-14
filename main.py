@@ -1,9 +1,10 @@
 """
-Main entry point for Data Ingestion Service.
-FastAPI application for uploading and processing CSV files.
+Main entry point for ForgeFlow AI.
+FastAPI application for production planning with NVIDIA NIM integration.
 """
 
 from fastapi import FastAPI
+from settings import settings  # loads .env on import
 from fastapi.middleware.cors import CORSMiddleware
 from routes.data_routes import router as data_router
 from routes.explanation_routes import router as explanation_router
@@ -12,8 +13,8 @@ from routes.schedule_routes import router as schedule_router
 
 # Create FastAPI application instance
 app = FastAPI(
-    title="Data Ingestion Service",
-    description="A FastAPI service for uploading, validating, and processing CSV data files (orders, machines, inventory). Data is stored in memory using pandas DataFrames and returned as parsed JSON.",
+    title="ForgeFlow AI",
+    description="AI-powered production planning for manufacturing. Powered by NVIDIA NIM.",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -44,18 +45,22 @@ async def root():
         JSON response with service details
     """
     return {
-        "service": "Data Ingestion Service",
+        "service": "ForgeFlow AI",
         "version": "1.0.0",
         "status": "running",
+        "nim": {
+            "configured": settings.nim_is_configured,
+            "model": settings.nvidia_nim_model if settings.nim_is_configured else None,
+        },
         "endpoints": {
             "docs": "/docs",
-            "redoc": "/redoc",
             "health": "/api/v1/health",
-            "upload_orders": "/api/v1/upload/orders",
-            "upload_machines": "/api/v1/upload/machines",
-            "upload_inventory": "/api/v1/upload/inventory",
+            "schedule": "/api/v1/schedule",
+            "whatif": "/api/v1/whatif",
+            "seed": "/api/v1/seed",
+            "copilot": "/copilot/chat",
             "explain": "/explain",
-        }
+        },
     }
 
 

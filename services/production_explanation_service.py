@@ -1,18 +1,20 @@
 """Production schedule explanations powered by NVIDIA NIM."""
-
 from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any
 
-import httpx
+from nim_client import nim_client
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
-DEFAULT_NIM_MODEL = "nvidia/llama-3.1-nemotron-70b-instruct"
+_SYSTEM_PROMPT = (
+    "You are a production planning explanation agent for a manufacturing factory. "
+    "Explain schedule decisions plainly and concisely for a factory scheduler. "
+    "Return only valid JSON with a top-level 'summaries' array of strings, "
+    "one string per order in the schedule."
+)
 
 
 class ProductionExplanationService:
@@ -33,7 +35,7 @@ class ProductionExplanationService:
                 "errors": ["Schedule is empty"],
             }
 
-        if use_nim and cls._nim_is_configured():
+        if use_nim and nim_client.is_configured:
             try:
                 summaries = await cls._explain_with_nim(schedule=schedule, context=context or {})
                 return {
@@ -44,24 +46,19 @@ class ProductionExplanationService:
                 }
             except Exception as exc:
                 logger.exception("NVIDIA NIM explanation failed; using local fallback")
-                fallback = cls._local_explanations(schedule=schedule, context=context or {})
                 return {
                     "status": "fallback",
                     "provider": "local",
-                    "summaries": fallback,
-                    "errors": [f"NVIDIA NIM explanation failed: {exc}"],
+                    "summaries": cls._local_explanations(schedule=schedule, context=context or {}),
+                    "errors": [f"NIM failed: {exc}"],
                 }
 
         return {
             "status": "fallback",
             "provider": "local",
             "summaries": cls._local_explanations(schedule=schedule, context=context or {}),
-            "errors": [] if not use_nim else ["NVIDIA NIM is not configured"],
+            "errors": [] if not use_nim else ["NVIDIA_API_KEY not configured"],
         }
-
-    @staticmethod
-    def _nim_is_configured() -> bool:
-        return bool(os.getenv("NVIDIA_API_KEY"))
 
     @classmethod
     async def _explain_with_nim(
@@ -69,60 +66,31 @@ class ProductionExplanationService:
         schedule: list[dict[str, Any]],
         context: dict[str, Any],
     ) -> list[str]:
-        api_key = os.environ["NVIDIA_API_KEY"]
-        base_url = os.getenv("NVIDIA_NIM_BASE_URL", DEFAULT_NIM_BASE_URL).rstrip("/")
-        model = os.getenv("NVIDIA_NIM_MODEL", DEFAULT_NIM_MODEL)
-        timeout_seconds = float(os.getenv("NVIDIA_NIM_TIMEOUT_SECONDS", "30"))
+        from settings import settings
 
-        prompt = cls._build_prompt(schedule=schedule, context=context)
-        payload = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a production planning explanation agent. "
-                        "Explain schedule decisions plainly and concisely. "
-                        "Return only valid JSON with a top-level 'summaries' array of strings."
-                    ),
-                },
-                {"role": "user", "content": prompt},
+        prompt = (
+            "Explain this production schedule. For each order explain: why it was prioritised, "
+            "any delays or blocks, and why that machine was assigned. One concise sentence per order.\n\n"
+            f"Schedule JSON:\n{json.dumps(schedule, indent=2, default=str)}\n\n"
+            f"Context:\n{json.dumps(context, indent=2, default=str)}"
+        )
+
+        content = await nim_client.chat(
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user",   "content": prompt},
             ],
-            "temperature": 0.2,
-            "max_tokens": 1200,
-        }
+            max_tokens=settings.nvidia_nim_max_tokens_explain,
+        )
 
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            response = await client.post(
-                f"{base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-            response.raise_for_status()
-
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
-        parsed = cls._parse_nim_json(content)
+        parsed = cls._parse_json(content)
         summaries = parsed.get("summaries", [])
-        if not isinstance(summaries, list) or not all(isinstance(item, str) for item in summaries):
-            raise ValueError("NIM response did not contain a valid summaries array")
+        if not isinstance(summaries, list) or not all(isinstance(s, str) for s in summaries):
+            raise ValueError(f"NIM returned unexpected summaries shape: {type(summaries)}")
         return summaries
 
     @staticmethod
-    def _build_prompt(schedule: list[dict[str, Any]], context: dict[str, Any]) -> str:
-        return (
-            "Explain this production schedule. Cover why orders were prioritized, "
-            "any delays or blocked orders, and why machines were assigned. "
-            "Use one concise summary per order.\n\n"
-            f"Schedule JSON:\n{json.dumps(schedule, indent=2, default=str)}\n\n"
-            f"Optional context:\n{json.dumps(context, indent=2, default=str)}"
-        )
-
-    @staticmethod
-    def _parse_nim_json(content: str) -> dict[str, Any]:
+    def _parse_json(content: str) -> dict[str, Any]:
         try:
             return json.loads(content)
         except json.JSONDecodeError:
@@ -130,7 +98,7 @@ class ProductionExplanationService:
             end = content.rfind("}")
             if start == -1 or end == -1 or end <= start:
                 raise
-            return json.loads(content[start : end + 1])
+            return json.loads(content[start: end + 1])
 
     @classmethod
     def _local_explanations(
@@ -138,74 +106,55 @@ class ProductionExplanationService:
         schedule: list[dict[str, Any]],
         context: dict[str, Any],
     ) -> list[str]:
-        priority_context = cls._priority_context(context)
+        priority_ctx = cls._priority_context(context)
         summaries: list[str] = []
 
         for position, item in enumerate(schedule, start=1):
-            order = item.get("order", f"order-{position}")
+            order   = item.get("order", f"order-{position}")
             machine = item.get("machine")
-            start = item.get("start")
-            end = item.get("end")
-            status = item.get("status", "scheduled")
-            reason = item.get("reason")
+            start   = item.get("start")
+            end     = item.get("end")
+            status  = item.get("status", "scheduled")
+            reason  = item.get("reason")
 
-            priority_text = priority_context.get(
+            priority_text = priority_ctx.get(
                 str(order),
-                f"Order {order} appears in schedule position {position}, so it was treated as a higher-priority job than later entries.",
+                f"Order {order} is at schedule position {position}.",
             )
 
             if status == "blocked":
-                delay_text = f"It is blocked because {reason or 'a required planning constraint was not satisfied'}."
-                machine_text = "No machine was assigned because the order cannot be released yet."
+                detail = f"Blocked — {reason or 'planning constraint not met'}. No machine assigned."
             elif item.get("delay") or status == "delayed":
-                delay_text = f"It is delayed because {reason or 'its planned completion misses a scheduling constraint'}."
-                machine_text = (
-                    f"It was assigned to machine {machine} from {start} to {end} "
-                    "based on available capacity and machine fit."
+                detail = (
+                    f"Delayed — {reason or 'scheduled past workday end'}. "
+                    f"Assigned to {machine} ({start} → {end})."
                 )
             else:
-                delay_text = "No delay was detected for this order."
-                machine_text = (
-                    f"It was assigned to machine {machine} from {start} to {end} "
-                    "because that machine was available for the required production window."
-                    if machine
-                    else "No machine assignment was present in the schedule."
+                detail = (
+                    f"On time. Assigned to {machine} ({start} → {end})."
+                    if machine else "No machine assigned."
                 )
 
-            summaries.append(f"{priority_text} {delay_text} {machine_text}")
+            summaries.append(f"{priority_text} {detail}")
 
         return summaries
 
     @staticmethod
     def _priority_context(context: dict[str, Any]) -> dict[str, str]:
-        prioritized_orders = context.get("prioritized_orders") or context.get("orders") or []
-        if isinstance(prioritized_orders, dict):
-            prioritized_orders = prioritized_orders.get("orders", [])
+        orders = context.get("prioritized_orders") or context.get("orders") or []
+        if isinstance(orders, dict):
+            orders = orders.get("orders", [])
+        if not isinstance(orders, list):
+            return {}
 
-        explanations: dict[str, str] = {}
-        if not isinstance(prioritized_orders, list):
-            return explanations
-
-        for index, order in enumerate(prioritized_orders, start=1):
+        result: dict[str, str] = {}
+        for i, order in enumerate(orders, start=1):
             if not isinstance(order, dict):
                 continue
-            order_id = order.get("order") or order.get("order_id")
-            if not order_id:
+            oid = order.get("order") or order.get("order_id")
+            if not oid:
                 continue
-            factors = order.get("priority_factors", {})
-            score = order.get("priority_score")
-            rank = order.get("queue_rank", index)
-            factor_text = ""
-            if isinstance(factors, dict):
-                normalized = factors.get("normalized_scores", {})
-                if isinstance(normalized, dict):
-                    factor_text = (
-                        f" due-date score {normalized.get('due_date')},"
-                        f" quantity score {normalized.get('quantity')},"
-                        f" urgency score {normalized.get('urgency_score')}."
-                    )
-            explanations[str(order_id)] = (
-                f"Order {order_id} was prioritized at queue rank {rank}"
-                f" with priority score {score}.{factor_text}"
-            )
-        return explanations
+            score  = order.get("priority_score")
+            rank   = order.get("queue_rank", i)
+            result[str(oid)] = f"Order {oid} ranked #{rank} with priority score {score}."
+        return result
