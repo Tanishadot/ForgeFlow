@@ -1,3 +1,5 @@
+// ── Scheduling ────────────────────────────────────────────────
+
 export interface ScheduleItem {
   order: string
   machine: string | null
@@ -57,3 +59,73 @@ export interface WhatIfResult {
 export type ScenarioType = 'machine_failure' | 'rush_order' | 'inventory_reduction'
 
 export type MachineStatus = 'running' | 'idle' | 'down' | 'maintenance'
+
+// ── B2B SaaS Entities ─────────────────────────────────────────
+
+export interface Company {
+  id:           string
+  company_name: string
+  industry:     string | null
+  location:     string | null
+  timezone:     string
+  created_at:   string
+}
+
+export interface Employee {
+  id:                      string
+  company_id:              string
+  employee_id:             string
+  name:                    string | null
+  email:                   string | null
+  department:              string | null
+  role:                    'employee' | 'manager' | 'admin'
+  shift:                   string | null
+  skill_level:             string | null
+  phone:                   string | null
+  password_reset_required: boolean
+  created_at:              string
+}
+
+export interface Order {
+  id:                    string
+  company_id:            string
+  order_code:            string
+  customer_name:         string | null
+  product_name:          string | null
+  quantity:              number
+  priority:              'low' | 'normal' | 'high' | 'urgent'
+  deadline:              string | null
+  required_machine_type: string | null
+  estimated_duration:    number
+  status:                'pending' | 'in_progress' | 'completed' | 'blocked'
+  notes:                 string | null
+  updated_at:            string
+  created_at:            string
+}
+
+export interface ShiftLog {
+  id:          string
+  company_id:  string
+  employee_id: string | null
+  machine_id:  string | null
+  order_id:    string | null
+  shift:       string | null
+  notes:       string
+  created_at:  string
+}
+
+export interface ShiftContext {
+  id:           string
+  company_id:   string
+  summary:      string
+  generated_at: string
+}
+
+export interface ShiftLogInsert {
+  company_id:  string
+  employee_id: string | null
+  machine_id:  string | null
+  order_id:    string | null
+  shift:       string
+  notes:       string
+}

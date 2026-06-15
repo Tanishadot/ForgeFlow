@@ -1,73 +1,111 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
 import './styles/index.css'
-import Dashboard from './pages/Dashboard'
-import Copilot from './pages/Copilot'
-import Simulation from './pages/Simulation'
-import { useStore } from './store'
 
-const NOW = new Date()
-const SHIFT_LABEL = NOW.getHours() < 16 ? 'Shift 1 · 09:00–17:00' : 'Shift 2 · 17:00–01:00'
+import { AuthProvider } from './context/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
+import Navbar from './components/Navbar'
 
-function AlertBadge() {
-  const alerts = useStore(s => s.alerts)
-  const criticals = alerts.filter(a => a.severity === 'critical').length
-  if (criticals === 0) return null
+import Landing      from './pages/Landing'
+import Login        from './pages/Login'
+import Signup       from './pages/Signup'
+import Onboarding   from './pages/Onboarding'
+import ChangePassword from './pages/ChangePassword'
+import Dashboard    from './pages/Dashboard'
+import Copilot      from './pages/Copilot'
+import Simulation   from './pages/Simulation'
+import Handover     from './pages/Handover'
+
+function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold"
-      style={{ background: 'rgba(220,38,38,0.2)', color: '#fca5a5', border: '1px solid rgba(220,38,38,0.4)' }}
-    >
-      ⛔ {criticals}
-    </span>
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      <main className="flex-1 p-5">{children}</main>
+    </div>
   )
 }
 
 function App() {
-  const navCls = ({ isActive }: { isActive: boolean }) =>
-    isActive
-      ? 'text-nvidia-400 font-semibold border-b-2 border-nvidia-500 pb-0.5'
-      : 'text-slate-400 hover:text-slate-200 transition-colors pb-0.5'
-
   return (
     <BrowserRouter>
-      <div className="min-h-screen flex flex-col">
-        {/* Header */}
-        <header
-          className="flex items-center justify-between px-6 py-3 shrink-0"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-nvidia-500 font-black text-xl tracking-tight">ForgeFlow</span>
-              <span className="text-slate-300 font-light text-xl">AI</span>
-            </div>
-            <span
-              className="text-xs text-slate-500 border rounded px-2 py-0.5"
-              style={{ borderColor: 'rgba(255,255,255,0.1)' }}
-            >
-              {SHIFT_LABEL}
-            </span>
-            <AlertBadge />
-          </div>
+      <AuthProvider>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: '#111827',
+              color: '#e2e8f0',
+              border: '1px solid rgba(118,185,0,0.2)',
+              fontSize: '13px',
+            },
+            success: { iconTheme: { primary: '#76b900', secondary: '#030712' } },
+          }}
+        />
 
-          <nav className="flex items-center gap-6 text-sm">
-            <NavLink to="/"           className={navCls}>Dashboard</NavLink>
-            <NavLink to="/simulation" className={navCls}>Simulation</NavLink>
-            <NavLink to="/copilot"    className={navCls}>Copilot</NavLink>
-          </nav>
-        </header>
+        <Routes>
+          {/* Public */}
+          <Route path="/"       element={<Landing />} />
+          <Route path="/login"  element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
 
-        {/* Main */}
-        <main className="flex-1 p-5">
-          <Routes>
-            <Route path="/"           element={<Dashboard />} />
-            <Route path="/simulation" element={<Simulation />} />
-            <Route path="/copilot"    element={<Copilot />} />
-          </Routes>
-        </main>
-      </div>
+          {/* Protected — without Navbar */}
+          <Route
+            path="/onboarding"
+            element={
+              <ProtectedRoute>
+                <Onboarding />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/change-password"
+            element={
+              <ProtectedRoute>
+                <ChangePassword />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected — with Navbar */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <AppShell><Dashboard /></AppShell>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/simulation"
+            element={
+              <ProtectedRoute>
+                <AppShell><Simulation /></AppShell>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/copilot"
+            element={
+              <ProtectedRoute>
+                <AppShell><Copilot /></AppShell>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/handover"
+            element={
+              <ProtectedRoute>
+                <AppShell><Handover /></AppShell>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Catch-all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   )
 }

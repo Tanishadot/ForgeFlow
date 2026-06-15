@@ -44,3 +44,5 @@ node_modules/
 # Local env files
 .env.local
 .env.*.local
+frontend/.env
+frontend/.env.local

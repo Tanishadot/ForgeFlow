@@ -1,5 +1,7 @@
-import React, { useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
+import { useAuth } from '../context/AuthContext'
 import AlertsBar from '../components/AlertsBar'
 import ScheduleTable from '../components/ScheduleTable'
 import GanttTimeline from '../components/GanttTimeline'
@@ -7,6 +9,10 @@ import MachinePanel from '../components/MachinePanel'
 import InventoryPanel from '../components/InventoryPanel'
 import WhatIfPanel from '../components/WhatIfPanel'
 import CopilotPanel from '../components/CopilotPanel'
+import UpdateStatusModal from '../components/UpdateStatusModal'
+import ShiftNotesModal from '../components/ShiftNotesModal'
+import ShiftSummaryBanner from '../components/ShiftSummaryBanner'
+import AdminSetupDashboard from '../components/AdminSetupDashboard'
 
 function SummaryPill({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -18,25 +24,54 @@ function SummaryPill({ label, value, color }: { label: string; value: number; co
 }
 
 export default function Dashboard() {
-  const { loading, error, lastUpdated, summary, alerts, seed, generateSchedule, clearError } = useStore()
+  const navigate = useNavigate()
+  const {
+    loading, error, lastUpdated, summary, alerts,
+    generateSchedule, loadFromDatabase, loadShiftContext, clearError,
+  } = useStore()
   const schedule  = useStore(s => s.schedule)
   const machines  = useStore(s => s.machines)
+  const inventory = useStore(s => s.inventory)
+  const orders    = useStore(s => s.orders)
+  const { role, companyId } = useAuth()
+
+  const [statusModalOpen,     setStatusModalOpen]     = useState(false)
+  const [shiftNotesModalOpen, setShiftNotesModalOpen] = useState(false)
 
   const criticalCount = alerts.filter(a => a.severity === 'critical').length
+
+  useEffect(() => {
+    if (companyId) {
+      loadFromDatabase(companyId)
+      loadShiftContext(companyId)
+    }
+  }, [companyId])
 
   function fmtTime(d: Date | null) {
     if (!d) return '—'
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
+  const isAdmin    = role === 'admin'
+  const isManager  = role === 'manager' || isAdmin
+  const isEmployee = role === 'employee'
+
   const hasData = machines.length > 0 || schedule.length > 0
+
+  // Admin sees setup dashboard until all four data categories are populated
+  const isAdminSetup = isAdmin && (
+    machines.length === 0 || inventory.length === 0 || orders.length === 0
+  )
 
   return (
     <div className="flex flex-col gap-3 h-full">
+      {/* Previous Shift Summary */}
+      <ShiftSummaryBanner />
+
       {/* Sub-header: summary + controls */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-4">
-          {hasData && (
+          {hasData && !isAdminSetup && (
             <>
               <SummaryPill label="on track" value={summary.on_track} color="#22c55e" />
               <SummaryPill label="delayed"  value={summary.delayed}  color="#f97316" />
@@ -45,20 +80,62 @@ export default function Dashboard() {
               <span className="text-slate-500 text-xs">{summary.total} orders total</span>
             </>
           )}
-          {lastUpdated && (
+          {lastUpdated && !isAdminSetup && (
             <span className="text-slate-600 text-xs hidden sm:inline">
               Updated {fmtTime(lastUpdated)}
             </span>
           )}
         </div>
-        <div className="flex gap-2">
-          <button onClick={seed} disabled={loading} className="btn btn-ghost btn-sm">
-            {loading ? '…' : '⬇ Load Sample Data'}
-          </button>
-          <button onClick={generateSchedule} disabled={loading || !hasData} className="btn btn-primary btn-sm">
-            {loading ? 'Generating…' : '▶ Generate Schedule'}
-          </button>
-        </div>
+
+        {/* Role-based action buttons — only shown when dashboard has data */}
+        {!isAdminSetup && (
+          <div className="flex gap-2 flex-wrap">
+            {isManager && (
+              <button
+                onClick={generateSchedule}
+                disabled={loading || !hasData}
+                className="btn btn-primary btn-sm"
+              >
+                {loading ? 'Generating…' : '▶ Generate Schedule'}
+              </button>
+            )}
+
+            {isManager && (
+              <button
+                onClick={() => navigate('/copilot')}
+                className="btn btn-ghost btn-sm"
+              >
+                📋 View Shift Logs
+              </button>
+            )}
+
+            {isManager && (
+              <button
+                onClick={() => navigate('/handover')}
+                className="btn btn-ghost btn-sm"
+                style={{ border: '1px solid rgba(118,185,0,0.3)', color: '#76b900' }}
+              >
+                🤖 Handover Brief
+              </button>
+            )}
+
+            {isEmployee && (
+              <button
+                onClick={() => setShiftNotesModalOpen(true)}
+                className="btn btn-ghost btn-sm"
+              >
+                📝 Submit Shift Notes
+              </button>
+            )}
+
+            <button
+              onClick={() => setStatusModalOpen(true)}
+              className="btn btn-ghost btn-sm"
+            >
+              ✏ Update Status
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Error banner */}
@@ -69,27 +146,30 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Alerts */}
-      <AlertsBar />
+      {/* ── Admin Setup Dashboard ────────────────────────────────────────── */}
+      {isAdminSetup && companyId && !loading && (
+        <AdminSetupDashboard companyId={companyId} />
+      )}
 
-      {/* Empty state */}
-      {!hasData && !loading && (
+      {/* ── Non-admin empty state ──────────────────────────────────────────── */}
+      {!isAdminSetup && !hasData && !loading && !isAdmin && (
         <div className="panel p-10 text-center flex flex-col items-center gap-3">
           <div className="text-4xl">🏭</div>
           <div className="text-lg font-semibold text-slate-300">No factory data loaded</div>
-          <div className="text-sm text-slate-500">Load sample data to see the production schedule, machine status, and AI recommendations.</div>
-          <button onClick={seed} disabled={loading} className="btn btn-primary mt-2">
-            ⬇ Load Sample Data
-          </button>
+          <div className="text-sm text-slate-500">
+            Your admin is setting up the factory. Check back soon.
+          </div>
         </div>
       )}
 
-      {/* Main grid */}
-      {hasData && (
+      {/* ── Alerts ────────────────────────────────────────────────────────── */}
+      {!isAdminSetup && <AlertsBar />}
+
+      {/* ── Main dashboard grid ───────────────────────────────────────────── */}
+      {!isAdminSetup && hasData && (
         <div className="flex gap-3 flex-1 min-h-0" style={{ alignItems: 'flex-start' }}>
           {/* Left column */}
           <div className="flex flex-col gap-3 flex-1 min-w-0">
-            {/* Schedule table */}
             <div className="panel p-4">
               <h2 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
                 Today's Schedule
@@ -100,7 +180,6 @@ export default function Dashboard() {
               <ScheduleTable />
             </div>
 
-            {/* Gantt */}
             <div className="panel p-4">
               <h2 className="text-sm font-semibold text-slate-300 mb-3">Production Timeline</h2>
               <GanttTimeline />
@@ -109,25 +188,21 @@ export default function Dashboard() {
 
           {/* Right column */}
           <div className="flex flex-col gap-3" style={{ width: 300, minWidth: 260, flexShrink: 0 }}>
-            {/* Machines */}
             <div className="panel p-4">
               <h2 className="text-sm font-semibold text-slate-300 mb-3">Machines</h2>
               <MachinePanel />
             </div>
 
-            {/* Inventory */}
             <div className="panel p-4">
               <h2 className="text-sm font-semibold text-slate-300 mb-3">Inventory</h2>
               <InventoryPanel />
             </div>
 
-            {/* What-If */}
             <div className="panel p-4">
               <h2 className="text-sm font-semibold text-slate-300 mb-3">What-If Simulator</h2>
               <WhatIfPanel />
             </div>
 
-            {/* Copilot */}
             <div className="panel p-4">
               <h2 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
                 AI Copilot
@@ -138,6 +213,16 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Modals */}
+      <UpdateStatusModal
+        open={statusModalOpen}
+        onClose={() => setStatusModalOpen(false)}
+      />
+      <ShiftNotesModal
+        open={shiftNotesModalOpen}
+        onClose={() => setShiftNotesModalOpen(false)}
+      />
     </div>
   )
 }
