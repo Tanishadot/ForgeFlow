@@ -7,10 +7,10 @@ export default defineConfig({
     port: 3000,
     proxy: {
       // Proxy API calls to backend
-      '/api': 'http://localhost:8000',
-      '/explain': 'http://localhost:8000',
-      '/simulate': 'http://localhost:8000',
-      '/copilot': 'http://localhost:8000'
+      '/api': 'http://127.0.0.1:8000',
+      '/explain': 'http://127.0.0.1:8000',
+      '/simulate': 'http://127.0.0.1:8000',
+      '/copilot': 'http://127.0.0.1:8000'
     }
   }
 })
