@@ -16,7 +16,7 @@ from agents.machine_agent.machine_allocator import (
     MachineAllocationConfig,
     allocate_machine,
 )
-from agents.order_agent.order_prioritizer import prioritize_orders
+from agents.order_agent.order_prioritizer import prioritize_orders, prioritize_orders_from_list
 from services.data_service import DataService
 
 logger = logging.getLogger(__name__)
@@ -212,6 +212,9 @@ def create_production_schedule(
     orders_file: str | None = DEFAULT_ORDERS_FILE,
     inventory_file: str | None = DEFAULT_INVENTORY_FILE,
     machines_file: str | None = DEFAULT_MACHINES_FILE,
+    machines_data: list[dict[str, Any]] | None = None,
+    inventory_data: list[dict[str, Any]] | None = None,
+    bom: dict[str, list[dict[str, Any]]] | None = None,
 ) -> list[dict[str, Any]]:
     """Create a JSON-serializable production schedule."""
     config = SchedulerConfig(
@@ -230,8 +233,18 @@ def create_production_schedule(
     machine_next_available: dict[str, datetime] = {}
     schedule: list[dict[str, Any]] = []
 
+    # Load the BOM once; use built-in defaults when caller does not supply one
+    from services.bom_service import load_bom
+    effective_bom = bom if bom is not None else load_bom()
+
     try:
-        order_queue = orders or _load_orders(orders_file)
+        # Always run OrderPrioritizerAgent: either prioritize a pre-loaded list
+        # (Supabase flow) or fall back to DataService / CSV (legacy flow).
+        if orders:
+            order_queue = prioritize_orders_from_list(orders)
+        else:
+            order_queue = _load_orders(orders_file)
+
         if not order_queue:
             logger.warning("No prioritized orders found for scheduling")
             return []
@@ -239,6 +252,9 @@ def create_production_schedule(
         inventory = inventory_status or verify_inventory(
             inventory_file=inventory_file,
             orders_file=orders_file,
+            inventory_records=inventory_data,
+            orders_records=order_queue if inventory_data else None,
+            bom=effective_bom,
         )
         blocked_orders = _blocked_orders_from_inventory(inventory)
 
@@ -272,6 +288,7 @@ def create_production_schedule(
                 location=_first_present(order, LOCATION_COLUMNS),
                 machines_file=machines_file,
                 config=machine_config,
+                machines_data=machines_data,
             )
             allocation_result = allocation.get("allocation") or {}
             machine_id = allocation_result.get("machine_id")

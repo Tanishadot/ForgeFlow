@@ -1,6 +1,7 @@
 import React from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 import { useStore } from '../store'
 import toast from 'react-hot-toast'
 
@@ -34,6 +35,7 @@ const SHIFT_LABEL = NOW.getHours() < 16 ? 'Shift 1 · 09:00–17:00' : 'Shift 2 
 
 export default function Navbar() {
   const { user, profile, role, companyName, employeeId, signOut } = useAuth()
+  const { canViewAdminPanel } = usePermissions()
   const navigate = useNavigate()
 
   const navCls = ({ isActive }: { isActive: boolean }) =>
@@ -91,6 +93,19 @@ export default function Navbar() {
         <NavLink to="/dashboard"  className={navCls}>Dashboard</NavLink>
         <NavLink to="/simulation" className={navCls}>Simulation</NavLink>
         <NavLink to="/copilot"    className={navCls}>Copilot</NavLink>
+        <NavLink to="/workforce"  className={navCls}>Workforce</NavLink>
+        {canViewAdminPanel && (
+          <NavLink
+            to="/admin"
+            className={({ isActive }) =>
+              isActive
+                ? 'text-red-400 font-semibold border-b-2 border-red-500 pb-0.5'
+                : 'text-slate-400 hover:text-slate-200 transition-colors pb-0.5'
+            }
+          >
+            Admin
+          </NavLink>
+        )}
       </nav>
 
       {/* Right: user info + logout */}

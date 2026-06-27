@@ -250,6 +250,7 @@ def allocate_machine(
     location: str | None = None,
     machines_file: str | None = DEFAULT_MACHINES_FILE,
     config: MachineAllocationConfig | None = None,
+    machines_data: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Read machines, detect issues, and return machine allocation JSON."""
     allocation_config = config or DEFAULT_CONFIG
@@ -276,7 +277,7 @@ def allocate_machine(
     }
 
     try:
-        machine_records = _load_machines(machines_file)
+        machine_records = machines_data if machines_data is not None else _load_machines(machines_file)
         if not machine_records:
             response["status"] = "error"
             response["errors"].append("No machine availability data found")

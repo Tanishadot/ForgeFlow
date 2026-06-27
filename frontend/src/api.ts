@@ -1,11 +1,24 @@
 import axios from 'axios'
+import { supabase } from './services/supabase'
 import type { ScheduleItem, Machine, InventoryItem, WhatIfResult, ScheduleSummary } from './types'
+
+// Attach the Supabase session JWT to every backend request.
+// Supabase manages token refresh automatically — getSession() always returns
+// the current (possibly refreshed) token from its local cache.
+axios.interceptors.request.use(async (config) => {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`
+  }
+  return config
+})
 
 interface ScheduleResponse {
   status: string
   schedule: ScheduleItem[]
   count: number
   summary: ScheduleSummary
+  machines?: Record<string, unknown>[]
 }
 
 interface DataResponse<T> {
@@ -39,6 +52,14 @@ interface ShiftSummaryResponse {
   status: string
 }
 
+interface ExplainResponse {
+  status: string
+  provider: string
+  summaries: string[]
+  recommendations: string[]
+  errors: string[]
+}
+
 interface CompleteSignupRequest {
   user_id:      string
   admin_name:   string
@@ -61,7 +82,15 @@ export const api = {
   seed: () =>
     axios.post<{ status: string; loaded: string[]; errors: string[] }>('/api/v1/seed'),
 
-  generateSchedule: (params?: Partial<{ workday_start: string; workday_end: string; default_duration_minutes: number }>) =>
+  generateSchedule: (params?: Partial<{
+    workday_start: string
+    workday_end: string
+    default_duration_minutes: number
+    orders: Record<string, unknown>[]
+    machines: Record<string, unknown>[]
+    inventory: Record<string, unknown>[]
+    company_id: string
+  }>) =>
     axios.post<ScheduleResponse>('/api/v1/schedule', params ?? {}),
 
   getMachines: () =>
@@ -73,8 +102,17 @@ export const api = {
   getOrders: () =>
     axios.get<DataResponse<Record<string, unknown>>>('/api/v1/data/orders'),
 
-  runWhatIf: (schedule: ScheduleItem[], scenario: Record<string, unknown>) =>
-    axios.post<WhatIfResult>('/api/v1/whatif', { schedule, scenario }),
+  runWhatIf: (
+    schedule: ScheduleItem[],
+    scenario: Record<string, unknown>,
+    machines?: Record<string, unknown>[],
+    inventory?: Record<string, unknown>[],
+    orders?: Record<string, unknown>[],
+  ) =>
+    axios.post<WhatIfResult>('/api/v1/whatif', { schedule, scenario, machines, inventory, orders }),
+
+  explainSchedule: (schedule: ScheduleItem[], context?: Record<string, unknown>) =>
+    axios.post<ExplainResponse>('/explain', { schedule, context: context ?? {}, use_nim: true }),
 
   copilotChat: (message: string, schedule: ScheduleItem[], sessionId: string) =>
     axios.post<CopilotResponse>('/copilot/chat', {

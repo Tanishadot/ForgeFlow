@@ -19,8 +19,14 @@ python-multipart==0.0.6
 # Excel/XLSX parsing (used by pandas for .xlsx uploads)
 openpyxl==3.1.2
 
-# HTTP Client (optional, for testing)
+# HTTP Client
 httpx==0.25.2
+
+# Auth — Supabase JWT verification
+PyJWT==2.8.0
+
+# Rate limiting
+slowapi==0.1.9
 
 # NVIDIA AgentIQ (NeMo Agent Toolkit)
 # Install from source per https://docs.nvidia.com/agentiq/latest/intro/install.html

@@ -14,41 +14,33 @@ class ValidationService:
     Handles missing columns, data type validation, and error reporting.
     """
     
-    # Expected column definitions for each data type
+    # Expected column definitions matching ForgeFlow's actual Supabase schema
     EXPECTED_SCHEMAS = {
         "orders": {
-            "order_id": str,
-            "customer_id": str,
-            "order_date": str,
-            "product_id": str,
-            "quantity": int,
-            "unit_price": float,
-            "total_amount": float,
-            "status": str,
-            "shipping_address": str,
+            "order_code":            str,
+            "customer_name":         str,
+            "product_name":          str,
+            "quantity":              int,
+            "priority":              str,
+            "deadline":              str,
+            "required_machine_type": str,
+            "estimated_duration":    int,
+            "status":                str,
         },
         "machines": {
-            "machine_id": str,
-            "machine_name": str,
-            "machine_type": str,
-            "location": str,
-            "status": str,
-            "capacity": float,
-            "efficiency": float,
-            "last_maintenance_date": str,
-            "operator_id": str,
+            "machine_code":      str,
+            "name":              str,
+            "type":              str,
+            "department":        str,
+            "status":            str,
+            "capacity_per_hour": float,
         },
         "inventory": {
-            "inventory_id": str,
-            "product_id": str,
-            "product_name": str,
-            "sku": str,
-            "quantity_on_hand": int,
-            "reorder_level": int,
-            "unit_cost": float,
-            "location": str,
-            "category": str,
-            "supplier_id": str,
+            "material_code":  str,
+            "material_name":  str,
+            "quantity":       float,
+            "unit":           str,
+            "minimum_stock":  float,
         },
     }
     

@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 
 from services.data_service import DataService
+from services.bom_service import resolve_order_requirements
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +212,9 @@ def verify_inventory(
     required_quantity: float | None = None,
     inventory_file: str | None = DEFAULT_INVENTORY_FILE,
     orders_file: str | None = None,
+    inventory_records: list[dict[str, Any]] | None = None,
+    orders_records: list[dict[str, Any]] | None = None,
+    bom: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     """Read inventory, verify availability, detect shortages, and return alerts."""
     response: dict[str, Any] = {
@@ -226,7 +230,7 @@ def verify_inventory(
     }
 
     try:
-        inventory_records = _load_inventory(inventory_file)
+        inventory_records = inventory_records if inventory_records is not None else _load_inventory(inventory_file)
         if not inventory_records:
             response["status"] = "error"
             response["errors"].append("No inventory data found")
@@ -244,7 +248,17 @@ def verify_inventory(
                 }
             ]
         else:
-            requirements = _order_requirements(_load_orders(orders_file))
+            order_list = orders_records if orders_records is not None else _load_orders(orders_file)
+            if bom is not None:
+                # BOM-based expansion: product_name → required materials
+                requirements = resolve_order_requirements(order_list, bom)
+                logger.info(
+                    "BOM-based requirements: %d orders expanded to %d material requirements",
+                    len(order_list),
+                    len(requirements),
+                )
+            else:
+                requirements = _order_requirements(order_list)
 
         availability_alerts = [
             _status_for_requirement(requirement, inventory_by_material)

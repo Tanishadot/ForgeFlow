@@ -1,0 +1,8 @@
+{
+  "_readme": "Custom BOM entries. Keys are lowercase product names from your orders table. Values are lists of {material, quantity_required}. material must match material_name in your inventory table (case-insensitive).",
+  "_example": {
+    "your product name": [
+      {"material": "your material name", "quantity_required": 5.0}
+    ]
+  }
+}

@@ -129,3 +129,12 @@ export interface AlertRow {
   severity:   'critical' | 'warning' | 'info'
   created_at: string
 }
+
+export interface ScheduleRow {
+  id:             string
+  company_id:     string
+  generated_at:   string
+  summary:        Record<string, number>
+  schedule_items: Record<string, unknown>[]
+  machines:       Record<string, unknown>[]
+}

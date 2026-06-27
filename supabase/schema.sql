@@ -131,6 +131,20 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 -- ============================================================
+-- SCHEDULES
+-- Persists the most recent generated schedule per company so it
+-- survives browser refreshes without requiring a re-run.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS schedules (
+  id             uuid         PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id     uuid         NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  generated_at   timestamptz  NOT NULL DEFAULT now(),
+  summary        jsonb        NOT NULL DEFAULT '{}',
+  schedule_items jsonb        NOT NULL DEFAULT '[]',
+  machines       jsonb        NOT NULL DEFAULT '[]'
+);
+
+-- ============================================================
 -- ALERTS
 -- System-generated or manually created alerts.
 -- ============================================================
@@ -179,6 +193,7 @@ ALTER TABLE employees    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE machines     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE schedules    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE alerts       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shift_logs   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shift_context ENABLE ROW LEVEL SECURITY;
@@ -250,6 +265,17 @@ CREATE POLICY "shift_logs_select" ON shift_logs FOR SELECT USING (
 );
 CREATE POLICY "shift_logs_insert" ON shift_logs FOR INSERT WITH CHECK (
   company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid())
+);
+
+-- ── Schedules ─────────────────────────────────────────────────
+CREATE POLICY "schedules_select" ON schedules FOR SELECT USING (
+  company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid())
+);
+CREATE POLICY "schedules_insert" ON schedules FOR INSERT WITH CHECK (true);
+CREATE POLICY "schedules_delete" ON schedules FOR DELETE USING (
+  company_id IN (
+    SELECT company_id FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'manager')
+  )
 );
 
 -- ── Shift Context ─────────────────────────────────────────────

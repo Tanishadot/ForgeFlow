@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import './styles/index.css'
 
 import { AuthProvider } from './context/AuthContext'
+import ErrorBoundary from './components/ErrorBoundary'
 import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
 
@@ -17,6 +18,8 @@ import Dashboard    from './pages/Dashboard'
 import Copilot      from './pages/Copilot'
 import Simulation   from './pages/Simulation'
 import Handover     from './pages/Handover'
+import Workforce    from './pages/Workforce'
+import Admin        from './pages/Admin'
 
 function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -101,6 +104,22 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/workforce"
+            element={
+              <ProtectedRoute>
+                <AppShell><Workforce /></AppShell>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AppShell><Admin /></AppShell>
+              </ProtectedRoute>
+            }
+          />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -110,4 +129,8 @@ function App() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById('root')!).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+)

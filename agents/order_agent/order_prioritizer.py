@@ -208,6 +208,54 @@ def prioritize_orders(
     return response
 
 
+def prioritize_orders_from_list(
+    orders: list[dict[str, Any]],
+    weights: PriorityWeights | None = None,
+) -> list[dict[str, Any]]:
+    """Score and rank a pre-loaded list of order dicts by priority.
+
+    Accepts orders in any format — uses the same scoring logic as
+    prioritize_orders() but reads from the provided list instead of
+    DataService.  Each returned dict is annotated with priority_score
+    and queue_rank.  Orders that cannot be scored are preserved as-is.
+    """
+    if not orders:
+        return []
+
+    normalized_weights = (weights or DEFAULT_WEIGHTS).normalized()
+    max_quantity = max((_safe_float(r.get("quantity")) for r in orders), default=0.0)
+    scored: list[dict[str, Any]] = []
+
+    for index, row in enumerate(orders):
+        try:
+            score, factors = _compute_score(row, normalized_weights, max_quantity)
+            item = dict(row)
+            item["priority_score"] = score
+            item["priority_factors"] = factors
+            item["queue_rank"] = 0
+            scored.append(item)
+        except Exception as exc:
+            order_id = row.get("order_id", f"row-{index}")
+            logger.exception("Error scoring order %s", order_id)
+            scored.append(dict(row))
+
+    scored.sort(
+        key=lambda r: (
+            r.get("priority_score", 0.0),
+            _urgency_score(r.get("urgency_score")),
+            _due_date_score(_safe_parse_date(r.get("due_date") or r.get("order_date"))),
+            _safe_float(r.get("quantity")),
+        ),
+        reverse=True,
+    )
+
+    for rank, row in enumerate(scored, start=1):
+        row["queue_rank"] = rank
+
+    logger.info("OrderPrioritizerAgent ranked %d orders from list", len(scored))
+    return scored
+
+
 class OrderPrioritizerAgent:
     """Small async wrapper used by AgentIQ or application code."""
 

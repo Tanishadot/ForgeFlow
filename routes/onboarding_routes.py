@@ -16,11 +16,13 @@ import pandas as pd
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from fastapi import Depends
+from dependencies.auth import verify_token
 from settings import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/onboarding", tags=["onboarding"])
+router = APIRouter(prefix="/api/v1/onboarding", tags=["onboarding"], dependencies=[Depends(verify_token)])
 
 
 # ── Supabase helpers ─────────────────────────────────────────────────────────

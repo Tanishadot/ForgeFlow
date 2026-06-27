@@ -31,4 +31,8 @@ class ExplanationResponse(BaseModel):
         default_factory=list,
         description="Natural language summaries explaining the schedule.",
     )
+    recommendations: list[str] = Field(
+        default_factory=list,
+        description="Actionable recommendations for the scheduler (reorders, rerouting, etc.).",
+    )
     errors: list[str] = Field(default_factory=list)

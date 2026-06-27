@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 import AlertsBar from '../components/AlertsBar'
 import ScheduleTable from '../components/ScheduleTable'
 import GanttTimeline from '../components/GanttTimeline'
@@ -13,6 +14,7 @@ import UpdateStatusModal from '../components/UpdateStatusModal'
 import ShiftNotesModal from '../components/ShiftNotesModal'
 import ShiftSummaryBanner from '../components/ShiftSummaryBanner'
 import AdminSetupDashboard from '../components/AdminSetupDashboard'
+import ExplanationModal from '../components/ExplanationModal'
 
 function SummaryPill({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -27,16 +29,19 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const {
     loading, error, lastUpdated, summary, alerts,
-    generateSchedule, loadFromDatabase, loadShiftContext, clearError,
+    generateSchedule, explainSchedule, loadFromDatabase, loadShiftContext, clearError,
+    explanation, explanationRecommendations, explanationProvider, explanationLoading, clearExplanation,
   } = useStore()
   const schedule  = useStore(s => s.schedule)
   const machines  = useStore(s => s.machines)
   const inventory = useStore(s => s.inventory)
   const orders    = useStore(s => s.orders)
   const { role, companyId } = useAuth()
+  const perms = usePermissions()
 
   const [statusModalOpen,     setStatusModalOpen]     = useState(false)
   const [shiftNotesModalOpen, setShiftNotesModalOpen] = useState(false)
+  const [explainModalOpen,    setExplainModalOpen]    = useState(false)
 
   const criticalCount = alerts.filter(a => a.severity === 'critical').length
 
@@ -52,13 +57,10 @@ export default function Dashboard() {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
-  const isAdmin    = role === 'admin'
-  const isManager  = role === 'manager' || isAdmin
-  const isEmployee = role === 'employee'
-
+  const isAdmin = role === 'admin'
   const hasData = machines.length > 0 || schedule.length > 0
 
-  // Admin sees setup dashboard until all four data categories are populated
+  // Admin sees the setup wizard until machines + inventory + orders are all loaded
   const isAdminSetup = isAdmin && (
     machines.length === 0 || inventory.length === 0 || orders.length === 0
   )
@@ -87,29 +89,40 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Role-based action buttons — only shown when dashboard has data */}
+        {/* Action buttons — AI & operational features available to all authenticated users */}
         {!isAdminSetup && (
           <div className="flex gap-2 flex-wrap">
-            {isManager && (
+            {perms.canRunScheduler && (
               <button
                 onClick={generateSchedule}
                 disabled={loading || !hasData}
                 className="btn btn-primary btn-sm"
               >
-                {loading ? 'Generating…' : '▶ Generate Schedule'}
+                {loading ? 'Running…' : '▶ Run AI Scheduler'}
               </button>
             )}
 
-            {isManager && (
+            {perms.canExplainSchedule && schedule.length > 0 && (
+              <button
+                onClick={() => { setExplainModalOpen(true); explainSchedule() }}
+                disabled={loading || explanationLoading}
+                className="btn btn-ghost btn-sm"
+                style={{ border: '1px solid rgba(118,185,0,0.3)', color: '#76b900' }}
+              >
+                {explanationLoading ? 'Analyzing…' : '✨ Explain Schedule'}
+              </button>
+            )}
+
+            {perms.canViewShiftLogs && (
               <button
                 onClick={() => navigate('/copilot')}
                 className="btn btn-ghost btn-sm"
               >
-                📋 View Shift Logs
+                📋 Shift Logs
               </button>
             )}
 
-            {isManager && (
+            {perms.canAccessHandover && (
               <button
                 onClick={() => navigate('/handover')}
                 className="btn btn-ghost btn-sm"
@@ -119,7 +132,7 @@ export default function Dashboard() {
               </button>
             )}
 
-            {isEmployee && (
+            {perms.canSubmitShiftNotes && (
               <button
                 onClick={() => setShiftNotesModalOpen(true)}
                 className="btn btn-ghost btn-sm"
@@ -128,12 +141,14 @@ export default function Dashboard() {
               </button>
             )}
 
-            <button
-              onClick={() => setStatusModalOpen(true)}
-              className="btn btn-ghost btn-sm"
-            >
-              ✏ Update Status
-            </button>
+            {perms.canUpdateStatus && (
+              <button
+                onClick={() => setStatusModalOpen(true)}
+                className="btn btn-ghost btn-sm"
+              >
+                ✏ Update Status
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -222,6 +237,14 @@ export default function Dashboard() {
       <ShiftNotesModal
         open={shiftNotesModalOpen}
         onClose={() => setShiftNotesModalOpen(false)}
+      />
+      <ExplanationModal
+        open={explainModalOpen}
+        onClose={() => { setExplainModalOpen(false); clearExplanation() }}
+        summaries={explanation ?? []}
+        recommendations={explanationRecommendations ?? []}
+        provider={explanationProvider}
+        loading={explanationLoading}
       />
     </div>
   )

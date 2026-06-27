@@ -47,6 +47,8 @@ export interface WhatIfImpact {
   delayed_orders: string[]
   schedule_changes: Array<{ order: string; from?: string; to?: string; reason?: string }>
   utilization_changes: Record<string, { before: number; after: number }>
+  new_schedule?: ScheduleItem[]
+  affected_orders?: Array<{ order: string; was: string; now: string; reason?: string }>
 }
 
 export interface WhatIfResult {

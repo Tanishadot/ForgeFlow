@@ -43,6 +43,7 @@ export default function WhatIfPanel() {
   const whatIfResult = useStore(s => s.whatIfResult)
   const loading      = useStore(s => s.loading)
   const runWhatIf    = useStore(s => s.runWhatIf)
+  const applyWhatIf  = useStore(s => s.applyWhatIf)
   const clearWhatIf  = useStore(s => s.clearWhatIf)
 
   const [scenarioType, setScenarioType] = useState<ScenarioType>('machine_failure')
@@ -56,13 +57,17 @@ export default function WhatIfPanel() {
     if (scenarioType === 'machine_failure') {
       scenario = { type: 'machine_failure', machine: machineId || machines[0]?.machine_id }
     } else if (scenarioType === 'rush_order') {
+      const selectedMachine = machines.find(m => m.machine_id === machineId) ?? machines[0]
       scenario = {
         type: 'rush_order',
         order: {
-          order: `RUSH-${Date.now()}`,
-          machine: machineId || machines[0]?.machine_id,
-          start: new Date().toISOString(),
-          end: new Date(Date.now() + parseInt(duration) * 3600000).toISOString(),
+          order_id:         `RUSH-${Date.now()}`,
+          product_name:     'Rush Order',
+          urgency_score:    10,
+          due_date:         new Date().toISOString().split('T')[0],
+          duration_minutes: Math.round(parseFloat(duration) * 60),
+          machine_type:     selectedMachine?.machine_type ?? undefined,
+          quantity:         1,
         },
       }
     } else {
@@ -102,21 +107,13 @@ export default function WhatIfPanel() {
             value={machineId}
             onChange={e => setMachineId(e.target.value)}
           >
-            <option value="">All machines</option>
+            <option value="">Pick machine</option>
             {machines.map(m => (
               <option key={m.machine_id} value={m.machine_id}>
                 {m.machine_id} ({m.machine_type ?? '?'})
               </option>
             ))}
           </select>
-          <input
-            type="number"
-            className="input text-xs w-20"
-            placeholder="hrs"
-            value={duration}
-            onChange={e => setDuration(e.target.value)}
-            title="Failure duration (hours)"
-          />
         </div>
       )}
 
@@ -204,9 +201,20 @@ export default function WhatIfPanel() {
             )}
           </div>
 
-          <button onClick={clearWhatIf} className="btn btn-ghost btn-sm w-full">
-            Clear Simulation
-          </button>
+          <div className="flex gap-2">
+            {whatIfResult?.impact?.new_schedule && whatIfResult.impact.new_schedule.length > 0 && (
+              <button
+                onClick={applyWhatIf}
+                className="btn btn-primary btn-sm flex-1"
+                title="Replace the current schedule with this simulation result"
+              >
+                ✓ Apply to Schedule
+              </button>
+            )}
+            <button onClick={clearWhatIf} className="btn btn-ghost btn-sm flex-1">
+              Clear
+            </button>
+          </div>
         </div>
       )}
 

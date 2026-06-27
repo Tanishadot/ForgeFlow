@@ -11,14 +11,15 @@ import logging
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from dependencies.auth import verify_token
 from settings import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/shift", tags=["shift"])
+router = APIRouter(prefix="/api/v1/shift", tags=["shift"], dependencies=[Depends(verify_token)])
 
 
 class ShiftLogEntry(BaseModel):

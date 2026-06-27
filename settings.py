@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
+    # JWT secret for local token verification (Project Settings → API → JWT Secret)
+    supabase_jwt_secret: str = ""
+
+    # ── CORS ──────────────────────────────────────────────────────────────────
+    # Comma-separated list of allowed origins, e.g.:
+    #   ALLOWED_ORIGINS=https://app.forgeflow.ai,https://staging.forgeflow.ai
+    allowed_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:4173"
 
     @property
     def nim_is_configured(self) -> bool:
